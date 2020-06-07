@@ -1,0 +1,31 @@
+#!/bin/bash
+
+[ ! -d data/2018 ] && mkdir data/2018
+
+# No download available for NC, NY, Alaska, California, Florida, Nevada,
+# and Wyoming
+STATES=(AL AR AK CO CT DE DC GA HA ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT
+  NE NH NM ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI)
+
+for state in "${STATES[@]}"; do
+  echo "Downloading data for ${state}"
+  curl \
+    -o 2018-${state}.zip \
+    http://s3-us-gov-west-1.amazonaws.com/cg-d4b776d0-d898-4153-90c8-8336f86bdfec/2018/${state}-2018.zip
+
+  echo "Unzipping retrieved data"
+  tar xvf 2018-${state}.zip -C data/2018/
+
+  echo "Removing zip file"
+  rm ./2018-${state}.zip
+
+  if [[ $(psql -lqt | cut -d \| -f 1 | grep $DB_NAME) ]]; then
+    (cd data/2018/${state} && psql -d $DB_NAME -f ./postgres_setup.sql)
+  fi
+
+  echo "Copying data for ${state} into database"
+  (cd data/2018/${state}/ && psql -d $DB_NAME -f ./postgres_load.sql)
+
+  echo "Removing raw data for ${state}"
+  rm -rf data/2018/${state}
+done
